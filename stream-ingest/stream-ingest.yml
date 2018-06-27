@@ -1,0 +1,50 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform:
+  - 'AWS::Serverless-2016-10-31'
+Parameters:
+  DBClusterName:
+    Description: The name of our MongoDB Atlas Cluster.
+    Type: String
+Resources:
+  StreamProcessor:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: stream-ingest.lambda_handler
+      Runtime: python2.7
+      Timeout: 120
+      ReservedConcurrentExecutions: 250
+      Tracing: Active
+      Policies:
+        - AWSLambdaKinesisExecutionRole
+        - AWSXrayWriteOnlyAccess
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - 'ssm:GetParameter*'
+              Resource:
+                'Fn::Sub': >-
+                  arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${DBClusterName}/*
+            - Effect: Allow
+              Action:
+                - 'kms:Decrypt'
+              Resource:
+                'Fn::Sub': 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*'
+      Environment:
+        Variables:
+          DBClusterName:
+            Ref: DBClusterName
+      Events:
+        StreamIngest:
+          Type: Kinesis
+          Properties:
+            Stream:
+              'Fn::GetAtt':
+                - IngestStream
+                - Arn
+            StartingPosition: LATEST
+
+  IngestStream:
+    Type: 'AWS::Kinesis::Stream'
+    Properties:
+      ShardCount: 1

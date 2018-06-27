@@ -1,0 +1,5 @@
+scores-api/*
+stream-ingest/*
+easy_*
+*packaged.yaml
+six*

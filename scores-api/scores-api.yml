@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform:
+  - 'AWS::Serverless-2016-10-31'
+Parameters:
+  DBClusterName:
+    Description: The name of our MongoDB Atlas Cluster.
+    Type: String
+Globals:
+  Function:
+    Runtime: python2.7
+    Timeout: 60
+    Tracing: Active
+    Environment:
+      Variables:
+        DBClusterName:
+          Ref: DBClusterName
+  Api:
+    Cors: "'*'"
+
+Resources:
+  ScoresAPIExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess'
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ssm:GetParameter*'
+                Resource:
+                  'Fn::Sub': >-
+                    arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${DBClusterName}/*
+              - Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                Resource:
+                  'Fn::Sub': 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*'
+  getScoresByTime:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: scores-api.getScoresByTime
+      Role:
+        'Fn::GetAtt':
+          - ScoresAPIExecutionRole
+          - Arn
+      Events:
+        getScoresSeconds:
+          Type: Api
+          Properties:
+            Path: '/scores/{seconds}'
+            Method: get
+        getScores:
+          Type: Api
+          Properties:
+            Path: /scores
+            Method: get
+  getTopScores:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Handler: scores-api.getTopScores
+      Role:
+        'Fn::GetAtt':
+          - ScoresAPIExecutionRole
+          - Arn
+      Events:
+        getTopScores:
+          Type: Api
+          Properties:
+            Path: /top
+            Method: get
